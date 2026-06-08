@@ -1,0 +1,164 @@
+/* --- 1. THEME & BASE --- */
+body {
+  width: 180px;
+  padding: 14px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background-color: #ffffff;
+  color: #333;
+  transition: background 0.25s ease, color 0.25s ease;
+  margin: 0;
+  overflow: hidden;
+}
+
+body.dark-mode {
+  background-color: #1a1b1e;
+  color: #eeeeee;
+}
+
+h3 {
+  margin: 0 0 4px 0;
+  text-align: center;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #228be6;
+}
+
+body.dark-mode h3 { color: #4dabf7; }
+
+/* --- 2. INFO BAR (HEADER) --- */
+.path-info {
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+  margin-bottom: 12px;
+  text-transform: lowercase;
+  line-height: 1.4;
+}
+
+.path-info code {
+  background: #f1f3f5;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-weight: 600;
+}
+
+body.dark-mode .path-info code {
+  background: #2c2e33;
+  color: #ced4da;
+}
+
+/* --- 3. BUTTONS --- */
+.btn-container { display: flex; flex-direction: column; gap: 8px; }
+
+.fancy-button {
+  background: linear-gradient(135deg, #4dabf7 0%, #228be6 100%);
+  color: white;
+  border: none;
+  padding: 11px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.fancy-button:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.fancy-button:active { transform: translateY(1px); }
+
+#myButton2 { background: linear-gradient(135deg, #51cf66 0%, #37b24d 100%); }
+
+/* --- 4. TOGGLE SWITCH (FOOTER) --- */
+.footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: center;
+}
+
+/* --- 5. THUMBNAIL PREVIEW --- */
+.preview-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+#image-thumbnail {
+  max-width: 120px;
+  max-height: 120px;
+  border-radius: 6px;
+
+  /* Added Border Styles */
+  border: 2px solid #dee2e6;
+  padding: 2px;
+  background-color: white;
+
+  display: none; /* Hidden until data loads */
+}
+
+/* Dark mode border adjustment */
+body.dark-mode #image-thumbnail {
+  border-color: #444;
+  background-color: #2c2e33;
+}
+
+#image-id-display {
+  font-size: 11px;
+  color: #888;
+  margin-top: 6px;
+  font-family: monospace;
+}
+
+body.dark-mode #image-thumbnail { border-color: #444; }
+
+
+
+body.dark-mode .footer { border-top-color: #2c2e33; }
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #777;
+}
+
+.slider {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  background-color: #dee2e6;
+  border-radius: 20px;
+  transition: .3s;
+}
+
+.slider:before {
+  content: "";
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: .3s;
+}
+
+
+
+input:checked + .slider { background-color: #228be6; }
+input:checked + .slider:before { transform: translateX(14px); }
+input { display: none; }

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body id="popup-body">
+  <h3>CivitAI Helper</h3>
+
+  <div class='path-info'>
+      saving to <code>/downloads/civitai/</code>
+  </div>
+
+
+  <div id="image-preview" class="preview-container">
+      <img id="image-thumbnail" src="" alt="Thumbnail">
+      <div id="image-id-display"></div>
+  </div>
+
+  <div class="btn-container">
+    <button id="myButton" class="fancy-button">Download Prompt</button>
+    <button id="myButton2" class="fancy-button">Download Image</button>
+  </div>
+
+  <div class="footer">
+    <label class="switch">
+      <span>Dark Mode</span>
+      <input type="checkbox" id="theme-toggle">
+      <div class="slider"></div>
+    </label>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

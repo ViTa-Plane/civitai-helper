@@ -1,36 +1,196 @@
 // --- HELPER TO RUN CODE ON THE ACTIVE WEBPAGE ---
-async function runOnActiveTab(func) {
+async function runOnActiveTab(func, args = []) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
 
   return chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    func: func
+    func: func,
+    args: args
   });
 }
 
-// --- NEW: Helper to extract image details from the active tab ---
+// --- DYNAMICALLY RESOLVE ACTIVE IMAGE USING EXACT CAROUSEL MAPPING ---
 async function getPageData() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !tab.id) return { src: null, id: null };
+  if (!tab || !tab.url) return { src: null, id: null, debugIndex: "1" };
 
   const results = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: () => {
-      const img = document.querySelector('div.relative.flex.size-full.items-center.justify-center img[src*="civitai.com"]');
-      const id = window.location.pathname.split('/').pop();
-      return { src: img ? img.src : null, id: id };
+      const modal = document.querySelector('div[role="dialog"], [class*="Modal"], [class*="Lightbox"], [class*="transform-3d flex-[0_0_100%]');
+      const searchRoot = modal || document;
+
+      // Enumerate image elements inside the target container block, carousel transform slides, and general gallery images
+      const transformSlideImgs = Array.from(searchRoot.querySelectorAll('[class*="transform-3d flex-[0_0_100%]"] img'));
+      const containerImgs = Array.from(searchRoot.querySelectorAll('div.relative.flex.size-full.items-center.justify-center img'));
+      const generalImgs = Array.from(searchRoot.querySelectorAll('img[src*="civitai"], img[src*="blobs"]'));
+
+      const allImgs = [...transformSlideImgs, ...containerImgs, ...generalImgs];
+      const validImages = [];
+      const seenUrls = new Set();
+
+      allImgs.forEach(img => {
+        const src = img.src || '';
+        const lowerSrc = src.toLowerCase();
+        const altText = (img.alt || '').toLowerCase();
+
+        const parentAnchor = img.closest('a');
+        const anchorHref = parentAnchor ? parentAnchor.href.toLowerCase() : '';
+        const isAdLink = anchorHref.includes('advertising.civitai.com');
+
+        const isBadAsset =
+          isAdLink ||
+          altText.includes('advertisement') ||
+          lowerSrc.includes('advertising.civitai.com') ||
+          lowerSrc.includes('avatar') ||
+          lowerSrc.includes('/users/') ||
+          lowerSrc.includes('profile') ||
+          lowerSrc.includes('bg') ||
+          lowerSrc.includes('background') ||
+          lowerSrc.includes('banner') ||
+          lowerSrc.includes('default') ||
+          img.classList.contains('mantine-Avatar-image') ||
+          img.closest('[class*="Avatar"]') !== null ||
+          img.closest('header') !== null;
+
+        const rect = img.getBoundingClientRect();
+        const isSmall = (rect.width > 0 && rect.width < 100) || (rect.height > 0 && rect.height < 100);
+
+        if (!isBadAsset && !isSmall && !seenUrls.has(src)) {
+          seenUrls.add(src);
+          const hashMatch = src.match(/\/([a-zA-Z0-9-]{36})\//) || src.match(/\/xG1nkqKTMzGDvpLrqFT7WA\/([a-zA-Z0-9-_]+)\//);
+          const imgId = hashMatch ? hashMatch[1] : "image";
+          validImages.push({ src: src, id: imgId });
+        }
+      });
+
+      // Locate pagination buttons to find raw 0-based active index and total buttons n
+      const indicatorBar = searchRoot.querySelector('div.flex.justify-center.gap-1') ||
+                           document.querySelector('div.flex.justify-center.gap-1');
+
+      let rawActiveIndex = -1;
+      let totalButtonsCount = 0;
+
+      if (indicatorBar) {
+        const indicatorButtons = Array.from(indicatorBar.querySelectorAll('button'));
+        totalButtonsCount = indicatorButtons.length;
+        indicatorButtons.forEach((btn, idx) => {
+          if (btn.getAttribute('data-active') === 'true' || btn.classList.contains('bg-blue-6')) {
+            rawActiveIndex = idx;
+          }
+        });
+      }
+
+      if (rawActiveIndex === -1) {
+        const activeBtn = searchRoot.querySelector('button[data-active="true"]');
+        if (activeBtn && activeBtn.parentElement) {
+          const siblings = Array.from(activeBtn.parentElement.children);
+          totalButtonsCount = siblings.length;
+          rawActiveIndex = siblings.indexOf(activeBtn);
+        }
+      }
+
+      if (rawActiveIndex === -1) {
+        rawActiveIndex = 0;
+      }
+
+      let userIndex = rawActiveIndex + 1; // index 1 to n
+      let mappedArrayIndex = rawActiveIndex;
+      const n = totalButtonsCount > 0 ? totalButtonsCount : userIndex;
+      const m = validImages.length;
+
+      // Apply exact custom mapping rule:
+      // - Index 1 -> image 1 (array index 0)
+      // - Index 2 to n-1 -> image m-1 (array index m - 2)
+      // - Index n -> image m (array index m - 1)
+      if (m > 0) {
+        if (userIndex === 1) {
+          mappedArrayIndex = 0;
+        } else if (userIndex >= 2 && userIndex < n && m >= 2) {
+          mappedArrayIndex = m - 2;
+        } else if (userIndex === n && m >= 1) {
+          mappedArrayIndex = m - 1;
+        } else {
+          mappedArrayIndex = Math.min(rawActiveIndex, m - 1);
+        }
+      }
+
+      const detectedIndex = `${userIndex}`;
+      let targetImgObj = validImages[mappedArrayIndex] || validImages[rawActiveIndex] || validImages[0] || null;
+
+      let src = targetImgObj ? targetImgObj.src : null;
+
+      const urlMatch = window.location.pathname.match(/\/images\/(\d+)/);
+      let id = urlMatch ? urlMatch[1] : null;
+
+      if (!id && targetImgObj && targetImgObj.id !== "image") {
+        id = targetImgObj.id;
+      }
+
+      if (!id) {
+        id = window.location.pathname.split('/').filter(Boolean).pop() || "image";
+      }
+
+      return { src: src, id: id, debugIndex: detectedIndex };
     }
   });
-  return results[0].result;
+
+  return results && results[0] ? results[0].result : { src: null, id: null, debugIndex: "1" };
 }
 
+// --- UI UPDATER WITH DEBOUNCE BUFFER ---
+let lastProcessedId = null;
+let pendingUpdateTimer = null;
 
+function updatePopupUI(data) {
+  if (!data) return;
+
+  const thumb = document.getElementById('image-thumbnail');
+  const idDisplay = document.getElementById('image-id-display');
+  const debugDisplay = document.getElementById('debug-index');
+
+  if (debugDisplay) {
+    debugDisplay.innerText = `Index: ${data.debugIndex}`;
+  }
+
+  if (idDisplay && data.id) {
+    idDisplay.innerText = `ID: ${data.id}`;
+  }
+
+  if (thumb && data.src) {
+    thumb.src = data.src;
+    thumb.style.display = 'block';
+  }
+
+  if (!data.id) return;
+
+  if (lastProcessedId !== data.id) {
+    lastProcessedId = data.id;
+
+    if (pendingUpdateTimer) clearTimeout(pendingUpdateTimer);
+
+    pendingUpdateTimer = setTimeout(async () => {
+      const freshData = await getPageData();
+      if (thumb && freshData && freshData.src) {
+        thumb.src = freshData.src;
+        thumb.style.display = 'block';
+      }
+      if (debugDisplay && freshData) {
+        debugDisplay.innerText = `Index: ${freshData.debugIndex}`;
+      }
+      if (idDisplay && freshData) {
+        idDisplay.innerText = `ID: ${freshData.id || "Unknown"}`;
+      }
+    }, 400);
+  }
+}
 
 // --- BUTTON 1: DOWNLOAD METADATA (SCRAPE) ---
 async function scrapeData() {
   await runOnActiveTab(() => {
-    const imageId = window.location.pathname.split('/').pop();
+    const match = window.location.pathname.match(/\/images\/(\d+)/);
+    const imageId = match ? match[1] : window.location.pathname.split('/').pop();
     const trpcUrl = `${window.location.origin}/api/trpc/image.getGenerationData?input=${encodeURIComponent(JSON.stringify({json:{id: parseInt(imageId)}}))}`;
 
     fetch(trpcUrl)
@@ -47,56 +207,51 @@ async function scrapeData() {
   });
 }
 
-// --- UPDATED BUTTON 2: DOWNLOAD IMAGE + THUMBNAIL ---
+// --- BUTTON 2: DOWNLOAD ACTIVE IMAGE + THUMBNAIL ---
 async function downloadCivitaiImage() {
-  await runOnActiveTab(() => {
-    const selector = 'div.relative.flex.size-full.items-center.justify-center img[src*="civitai.com"]';
-    const img = document.querySelector(selector);
+  // Reuse getPageData to ensure download uses the exact same mapping and active image resolution
+  const pageData = await getPageData();
+  if (!pageData || !pageData.src) return;
 
-    if (!img) {
-      console.error("Image not found in the expected container.");
-      return;
-    }
+  const imageId = pageData.id || "downloaded_image";
 
-    const urlMatch = window.location.href.match(/images\/(\d+)/);
-    const imageId = urlMatch ? urlMatch[1] : "downloaded_image";
+  let highResUrl = pageData.src.split('/width=')[0].split('/quality=')[0];
+  highResUrl = highResUrl.includes('?') ? `${highResUrl}&original=true` : `${highResUrl}?original=true`;
 
-    // Clean URL for highest resolution
-    let highResUrl = img.src.split('/width=')[0].split('/quality=')[0];
-    highResUrl = highResUrl.includes('?') ? `${highResUrl}&original=true` : `${highResUrl}?original=true`;
+  const extMatch = highResUrl.match(/\.([a-z0-9]+)(\?|$)/i);
+  const ext = (extMatch && extMatch[1] !== 'webp') ? extMatch[1] : 'jpg';
 
-    const extMatch = highResUrl.match(/\.([a-z0-9]+)(\?|$)/i);
-    const ext = (extMatch && extMatch[1] !== 'webp') ? extMatch[1] : 'jpg';
+  // Route image download
+  chrome.runtime.sendMessage({
+    action: "DOWNLOAD_IMAGE",
+    url: highResUrl,
+    filename: imageId,
+    extension: ext
+  });
 
-    chrome.runtime.sendMessage({
-      action: "DOWNLOAD_IMAGE",
-      url: highResUrl,
-      filename: imageId,              // Include the directory
-      extension: ext                  // Pass extension separately
-    });
-
-    // 2. Thumbnail Logic (Fixing the "download.jpg" issue)
+  // Generate canvas thumbnail from the verified preview src
+  await runOnActiveTab((imgSrc, imgId) => {
     const canvas = document.createElement('canvas');
     canvas.width = 200;
     canvas.height = 200;
     const ctx = canvas.getContext('2d');
     const tempImg = new Image();
     tempImg.crossOrigin = "anonymous";
-    tempImg.src = img.src;
+    tempImg.src = imgSrc;
 
     tempImg.onload = () => {
       const sourceSize = Math.min(tempImg.naturalWidth, tempImg.naturalHeight);
       const offsetX = (tempImg.naturalWidth - sourceSize) / 2;
       ctx.drawImage(tempImg, offsetX, 0, sourceSize, sourceSize, 0, 0, 200, 200);
 
-        chrome.runtime.sendMessage({
-          action: "DOWNLOAD_THUMBNAIL",
-          url: canvas.toDataURL('image/jpeg', 0.9),
-          filename: "thumbnails/tn_" + imageId, // Include directory
-          extension: "jpg"
-        });
+      chrome.runtime.sendMessage({
+        action: "DOWNLOAD_THUMBNAIL",
+        url: canvas.toDataURL('image/jpeg', 0.9),
+        filename: "thumbnails/tn_" + imgId,
+        extension: "jpg"
+      });
     };
-  });
+  }, [pageData.src, imageId]);
 }
 
 // --- INITIALIZATION ---
@@ -106,7 +261,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const scrapeBtn = document.getElementById('myButton');
   const downloadBtn = document.getElementById('myButton2');
 
-  // 1. Theme Logic
   if (themeToggle) {
     const data = await chrome.storage.local.get('theme');
     if (data.theme === 'dark') {
@@ -120,18 +274,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // 2. Load Thumbnail and ID
-  const data = await getPageData();
-  const thumb = document.getElementById('image-thumbnail');
-  const idDisplay = document.getElementById('image-id-display');
+  // Initial load
+  const initialData = await getPageData();
+  updatePopupUI(initialData);
 
-  if (data && data.src) {
-    thumb.src = data.src;
-    thumb.style.display = 'block';
-    idDisplay.innerText = `ID: ${data.id}`;
-  }
+  // Poll active tab every 300ms to stay synchronized with gallery browsing
+  const pollInterval = setInterval(async () => {
+    try {
+      const currentData = await getPageData();
+      updatePopupUI(currentData);
+    } catch (e) {
+      clearInterval(pollInterval);
+    }
+  }, 300);
 
-  // 3. Button Listeners
+  window.addEventListener('unload', () => clearInterval(pollInterval));
+
   if (scrapeBtn) scrapeBtn.addEventListener('click', scrapeData);
   if (downloadBtn) downloadBtn.addEventListener('click', downloadCivitaiImage);
 });

@@ -157,7 +157,18 @@ body.dark-mode .footer { border-top-color: #2c2e33; }
   transition: .3s;
 }
 
+.info {
+  font-size: 13px;
+  font-weight: 500;
+}
 
+.debug-info {
+  font-size: 11px;
+  color: #777;
+  background: rgba(0,0,0,0.05);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
 
 input:checked + .slider { background-color: #228be6; }
 input:checked + .slider:before { transform: translateX(14px); }

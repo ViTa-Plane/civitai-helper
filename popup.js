@@ -51,7 +51,9 @@ async function getPageData() {
           lowerSrc.includes('banner') ||
           lowerSrc.includes('default') ||
           img.classList.contains('mantine-Avatar-image') ||
+          img.className.includes('mantine-Card-section') || // Added: checks if the class string contains it anywhere
           img.closest('[class*="Avatar"]') !== null ||
+          img.closest('[class*="mantine-Card-section"]') !== null || // Added: checks if element or ancestors contain it
           img.closest('header') !== null;
 
         const rect = img.getBoundingClientRect();

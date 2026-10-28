@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Civitai Helper",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "description": "Saves high-res images, generation prompts and metadata from Civitai with organized filenames. Active on \"civitai.com/images/*\" and \"civitai.red/images/*\" URL's" ,
   "icons": {
     "16": "images/icon16.png",

@@ -18,10 +18,10 @@ async function getPageData() {
   const results = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: () => {
-      const modal = document.querySelector('div[role="dialog"], [class*="Modal"], [class*="Lightbox"], [class*="transform-3d flex-[0_0_100%]');
+      const modal = document.querySelector('div[role="dialog"], [class*="Modal"], [class*="Lightbox"]');
       const searchRoot = modal || document;
 
-      // Enumerate image elements inside the target container block, carousel transform slides, and general gallery images
+      // Enumerate image elements inside target container blocks, carousel transform slides, and general gallery images
       const transformSlideImgs = Array.from(searchRoot.querySelectorAll('[class*="transform-3d flex-[0_0_100%]"] img'));
       const containerImgs = Array.from(searchRoot.querySelectorAll('div.relative.flex.size-full.items-center.justify-center img'));
       const generalImgs = Array.from(searchRoot.querySelectorAll('img[src*="civitai"], img[src*="blobs"]'));
@@ -91,28 +91,34 @@ async function getPageData() {
         }
       }
 
-      if (rawActiveIndex === -1) {
-        rawActiveIndex = 0;
-      }
-
-      let userIndex = rawActiveIndex + 1; // index 1 to n
-      let mappedArrayIndex = rawActiveIndex;
-      const n = totalButtonsCount > 0 ? totalButtonsCount : userIndex;
+      let userIndex = 1;
+      let mappedArrayIndex = 0;
       const m = validImages.length;
 
-      // Apply exact custom mapping rule:
-      // - Index 1 -> image 1 (array index 0)
-      // - Index 2 to n-1 -> image m-1 (array index m - 2)
-      // - Index n -> image m (array index m - 1)
-      if (m > 0) {
-        if (userIndex === 1) {
-          mappedArrayIndex = 0;
-        } else if (userIndex >= 2 && userIndex < n && m >= 2) {
-          mappedArrayIndex = m - 2;
-        } else if (userIndex === n && m >= 1) {
-          mappedArrayIndex = m - 1;
+      // If buttons are found, use carousel mapping rules
+      if (rawActiveIndex !== -1 && totalButtonsCount > 0) {
+        userIndex = rawActiveIndex + 1;
+        const n = totalButtonsCount;
+
+        if (m > 0) {
+          if (userIndex === 1) {
+            mappedArrayIndex = 0;
+          } else if (userIndex >= 2 && userIndex < n && m >= 2) {
+            mappedArrayIndex = m - 2;
+          } else if (userIndex === n && m >= 1) {
+            mappedArrayIndex = m - 1;
+          } else {
+            mappedArrayIndex = Math.min(rawActiveIndex, m - 1);
+          }
+        }
+      } else {
+        // Fallback when buttons are NOT found
+        if (m === 3) {
+          userIndex = 2;
+          mappedArrayIndex = 1; // Select index 2
         } else {
-          mappedArrayIndex = Math.min(rawActiveIndex, m - 1);
+          userIndex = 1;
+          mappedArrayIndex = 0; // Default to index 1
         }
       }
 
@@ -209,7 +215,7 @@ async function scrapeData() {
 
 // --- BUTTON 2: DOWNLOAD ACTIVE IMAGE + THUMBNAIL ---
 async function downloadCivitaiImage() {
-  // Reuse getPageData to ensure download uses the exact same mapping and active image resolution
+  // Reuse getPageData to guarantee 100% synchronization with the popup preview and mapping rules
   const pageData = await getPageData();
   if (!pageData || !pageData.src) return;
 
@@ -229,7 +235,7 @@ async function downloadCivitaiImage() {
     extension: ext
   });
 
-  // Generate canvas thumbnail from the verified preview src
+  // Generate canvas thumbnail from verified preview source
   await runOnActiveTab((imgSrc, imgId) => {
     const canvas = document.createElement('canvas');
     canvas.width = 200;
